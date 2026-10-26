@@ -1,0 +1,110 @@
+tests:
+  - name: pm25_yields_five_rows
+    target_processors: to_rows
+    input_batch:
+      - file_content: testdata/pm25.json
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: |
+            this.length() == 5 &&
+            this.map_each(r -> r.region + ":" + r.value.string()).sort() == ["central:27", "east:33", "north:25", "south:21", "west:39"] &&
+            this.filter(r -> r.region == "west").index(0) == {
+              "source": "pm25", "metric": "pm25_one_hourly", "region": "west",
+              "observed_at": "2026-10-26T00:00:00+08:00", "source_updated_at": "2026-10-26T00:45:32+08:00",
+              "value": 39, "unit": "ug/m3", "ingested_at": "2026-10-26T00:46:00Z",
+              "bronze_partition": 0, "bronze_offset": 7, "payload_sha256": "abc123"
+            }
+
+  - name: pm25_unarchives_to_five_messages
+    target_processors: /pipeline/processors
+    input_batch:
+      - file_content: testdata/pm25.json
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'this.source == "pm25" && this.metric == "pm25_one_hourly" && this.bronze_offset == 7'
+        - bloblang: 'this.source == "pm25" && this.metric == "pm25_one_hourly" && this.bronze_offset == 7'
+        - bloblang: 'this.source == "pm25" && this.metric == "pm25_one_hourly" && this.bronze_offset == 7'
+        - bloblang: 'this.source == "pm25" && this.metric == "pm25_one_hourly" && this.bronze_offset == 7'
+        - bloblang: 'this.source == "pm25" && this.metric == "pm25_one_hourly" && this.bronze_offset == 7'
+
+  - name: psi_yields_sixty_rows
+    target_processors: to_rows
+    input_batch:
+      - file_content: testdata/psi.json
+        metadata: {source: psi, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: |
+            this.length() == 60 &&
+            this.filter(r -> r.metric == "psi_twenty_four_hourly" && r.region == "west").index(0).value == 72 &&
+            this.filter(r -> r.metric == "psi_twenty_four_hourly" && r.region == "west").index(0).observed_at == "2026-10-26T16:00:00+08:00" &&
+            this.filter(r -> r.metric == "psi_twenty_four_hourly" && r.region == "west").index(0).source_updated_at == "2026-10-26T16:45:34+08:00" &&
+            this.filter(r -> r.unit == "ug/m3").length() == 0
+
+  - name: uv_yields_one_national_row_per_index_entry
+    target_processors: to_rows
+    input_batch:
+      - file_content: testdata/uv.json
+        metadata: {source: uv, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: |
+            this.length() == 10 &&
+            this.all(r -> r.region == "national" && r.metric == "uv_index" && r.source == "uv" &&
+                          r.source_updated_at == "2026-10-26T16:11:09+08:00") &&
+            this.filter(r -> r.observed_at == "2026-10-26T12:00:00+08:00").index(0).value == 4
+
+  - name: empty_uv_index_is_unexpected_shape
+    target_processors: to_rows
+    input_batch:
+      - file_content: testdata/empty_uv_index.json
+        metadata: {source: uv, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("unexpected_shape")'
+
+  - name: bad_json_is_invalid_json
+    target_processors: to_rows
+    input_batch:
+      - file_content: testdata/bad_json.txt
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("invalid_json")'
+          file_equals: testdata/bad_json.txt
+
+  - name: empty_items_is_unexpected_shape
+    target_processors: to_rows
+    input_batch:
+      - file_content: testdata/empty_items.json
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("unexpected_shape")'
+
+  - name: unknown_source_is_unexpected_shape
+    target_processors: to_rows
+    input_batch:
+      - file_content: testdata/pm25.json
+        metadata: {source: rainfall, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("unexpected_shape")'
+
+  - name: unknown_region_rejects_whole_message
+    target_processors: /pipeline/processors
+    input_batch:
+      - file_content: testdata/unknown_region.json
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("unknown_region")'
+
+  - name: non_numeric_value_is_rejected
+    target_processors: /pipeline/processors
+    input_batch:
+      - file_content: testdata/non_numeric.json
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("non_numeric_value")'
+
+  - name: huge_value_is_out_of_range
+    target_processors: /pipeline/processors
+    input_batch:
+      - file_content: testdata/huge_value.json
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("value_out_of_range")'

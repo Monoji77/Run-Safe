@@ -43,6 +43,18 @@ services:
         rpk -X brokers=redpanda:9092 topic create weather.dlq -c retention.ms=-1 -c retention.bytes=-1 \
           || rpk -X brokers=redpanda:9092 topic describe weather.dlq > /dev/null
 
+  connect:
+    image: docker.redpanda.com/redpandadata/connect:4.115.1
+    working_dir: /connect
+    volumes:
+      - ./connect:/connect:ro
+    command: ["run", "/connect/pipeline.yaml"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: postgis/postgis:17-3.6
     environment:

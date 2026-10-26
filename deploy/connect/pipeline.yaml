@@ -1,0 +1,108 @@
+input:
+  kafka_franz:
+    seed_brokers: [redpanda:9092]
+    topics: [weather.bronze]
+    consumer_group: connect-gold
+    start_from_oldest: true
+
+pipeline:
+  processors:
+    # Turns one raw API body into an array of gold.observations rows. All-or-nothing: any problem
+    # raises an error that starts with a reason code, which marks the whole message as failed.
+    - label: to_rows
+      mapping: |
+        let source = metadata("source").or("")
+        let body = content().parse_json().catch(null)
+        if $body == null {
+          root = throw("invalid_json: body is not valid JSON")
+        }
+
+        let allowed_regions = ["north", "south", "east", "west", "central"]
+        let ts_layout = "2006-01-02T15:04:05Z07:00"
+        let lineage = {
+          "ingested_at": metadata("fetched_at"),
+          "bronze_partition": metadata("kafka_partition").number(),
+          "bronze_offset": metadata("kafka_offset").number(),
+          "payload_sha256": metadata("payload_sha256")
+        }
+
+        if $source == "pm25" || $source == "psi" {
+          let item = $body.data.items.index(0).catch(null)
+          if $item == null || $item.type() != "object" {
+            root = throw("unexpected_shape: data.items[0] is missing")
+          }
+          if $item.timestamp.type() != "string" || $item.timestamp.ts_parse($ts_layout).catch(null) == null ||
+             $item.updatedTimestamp.type() != "string" || $item.updatedTimestamp.ts_parse($ts_layout).catch(null) == null {
+            root = throw("unexpected_shape: timestamp or updatedTimestamp is missing or not RFC3339")
+          }
+          if $item.readings.type() != "object" {
+            root = throw("unexpected_shape: readings is not an object")
+          }
+          let rows = $item.readings.key_values().map_each(m -> if m.value.type() != "object" {
+              throw("unexpected_shape: readings." + m.key + " is not an object")
+            } else {
+              m.value.key_values().map_each(r -> if !$allowed_regions.contains(r.key) {
+                  throw("unknown_region: " + r.key)
+                } else if r.value.type() != "number" {
+                  throw("non_numeric_value: " + m.key + "/" + r.key)
+                } else if r.value.abs() > 1000000000 {
+                  throw("value_out_of_range: " + m.key + "/" + r.key)
+                } else {
+                  {
+                    "source": $source,
+                    "metric": m.key,
+                    "region": r.key,
+                    "observed_at": $item.timestamp,
+                    "source_updated_at": $item.updatedTimestamp,
+                    "value": r.value,
+                    "unit": if m.key == "pm25_one_hourly" { "ug/m3" } else { null }
+                  }.merge($lineage)
+                }
+              )
+            }
+          ).flatten()
+          if $rows.length() == 0 {
+            root = throw("unexpected_shape: no readings")
+          }
+          root = $rows
+        } else if $source == "uv" {
+          let rec = $body.data.records.index(0).catch(null)
+          if $rec == null || $rec.type() != "object" {
+            root = throw("unexpected_shape: data.records[0] is missing")
+          }
+          if $rec.updatedTimestamp.type() != "string" || $rec.updatedTimestamp.ts_parse($ts_layout).catch(null) == null {
+            root = throw("unexpected_shape: updatedTimestamp is missing or not RFC3339")
+          }
+          if $rec.index.type() != "array" || $rec.index.length() == 0 {
+            root = throw("unexpected_shape: uv index is empty")
+          }
+          root = $rec.index.map_each(e -> if e.hour.type() != "string" || e.hour.ts_parse($ts_layout).catch(null) == null {
+              throw("unexpected_shape: uv hour is missing or not RFC3339")
+            } else if e.value.type() != "number" {
+              throw("non_numeric_value: uv_index/" + e.hour)
+            } else if e.value.abs() > 1000000000 {
+              throw("value_out_of_range: uv_index/" + e.hour)
+            } else {
+              {
+                "source": "uv",
+                "metric": "uv_index",
+                "region": "national",
+                "observed_at": e.hour,
+                "source_updated_at": $rec.updatedTimestamp,
+                "value": e.value,
+                "unit": null
+              }.merge($lineage)
+            }
+          )
+        } else {
+          root = throw("unexpected_shape: unknown source " + $source)
+        }
+
+    - switch:
+        - check: '!errored()'
+          processors:
+            - unarchive:
+                format: json_array
+
+output:
+  drop: {}
