@@ -43,6 +43,21 @@ services:
         rpk -X brokers=redpanda:9092 topic create weather.dlq -c retention.ms=-1 -c retention.bytes=-1 \
           || rpk -X brokers=redpanda:9092 topic describe weather.dlq > /dev/null
 
+  fetcher:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.fetcher
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      FETCH_INTERVAL: ${FETCH_INTERVAL:-60s}
+      DATA_GOV_SG_API_KEY: ${DATA_GOV_SG_API_KEY:-}
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   connect:
     image: docker.redpanda.com/redpandadata/connect:4.115.1
     working_dir: /connect
