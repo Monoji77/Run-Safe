@@ -1,0 +1,36 @@
+# Versioned guidance. Bands and advice mirror the 1-hour PM2.5 guidance shown on haze.gov.sg.
+# Update `version` and `retrieved` whenever the thresholds or wording change.
+version: "2026-10-26"
+source: https://www.haze.gov.sg/
+retrieved: "2026-10-26"
+
+# A reading older than this (measured from observed_at) is treated as unknown.
+stale_after: 90m
+
+pm25:
+  bands:
+    - name: normal
+      max: 55
+      healthy:    {headline: ok,      text: "Continue normal activities"}
+      vulnerable: {headline: ok,      text: "Continue normal activities"}
+    - name: elevated
+      max: 150
+      healthy:    {headline: caution, text: "Reduce strenuous outdoor activities for the next hour"}
+      vulnerable: {headline: avoid,   text: "Avoid strenuous outdoor activities for the next hour"}
+    - name: high
+      max: 250
+      healthy:    {headline: avoid,   text: "Avoid strenuous outdoor activities for the next hour"}
+      vulnerable: {headline: avoid,   text: "Avoid all outdoor activities for the next hour; may wear a mask to reduce exposure"}
+    - name: very_high
+      healthy:    {headline: avoid,   text: "Minimise all outdoor activities for the next hour; may wear a mask to reduce exposure"}
+      vulnerable: {headline: avoid,   text: "Avoid all outdoor activities for the next hour; may wear a mask to reduce exposure"}
+
+# UV bands as reported by a 2024 news article; verify against NEA before relying on them.
+uv:
+  sunscreen_from: 3
+  bands:
+    - {name: low, max: 2}
+    - {name: moderate, max: 5}
+    - {name: high, max: 7}
+    - {name: very_high, max: 10}
+    - {name: extreme}
