@@ -12,10 +12,13 @@ import (
 	"github.com/Monoji77/Run-Safe/internal/store"
 )
 
-// Coarse bounding box around Singapore; coordinates outside it are rejected rather than mapped to a region.
+// Coarse bounding box around Singapore's main island and nearby islands; coordinates outside it are rejected
+// rather than mapped to a region. It excludes Johor Bahru and Batam's northern shore, but a box cannot follow the
+// coastline: a strip along the Causeway and the waters between Singapore and Batam can still map to Singapore.
+// A real boundary check needs the polygons in gold.regions.boundary (a later plan).
 const (
-	minLat, maxLat = 1.15, 1.48
-	minLon, maxLon = 103.55, 104.10
+	minLat, maxLat = 1.15, 1.47
+	minLon, maxLon = 103.60, 104.06
 )
 
 var sgt = time.FixedZone("SGT", 8*3600)

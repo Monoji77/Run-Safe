@@ -181,3 +181,18 @@ func TestNonNumericValueGoesToDLQ(t *testing.T) {
 		t.Errorf("error header = %q, want non_numeric_value", header(rec, "error"))
 	}
 }
+
+func TestRecordWithoutHeadersGoesToDLQAndDoesNotStallTheStream(t *testing.T) {
+	harness.TruncateGold(t)
+	// A producer that sets source but forgets fetched_at and payload_sha256: without validation the NOT NULL violation would be retried forever.
+	rec := &kgo.Record{Topic: harness.BronzeTopic, Key: []byte("pm25:headerless"), Value: fixture(t, "pm25.json"),
+		Headers: []kgo.RecordHeader{{Key: "source", Value: []byte("pm25")}}}
+	if err := harness.Kafka(t).ProduceSync(ctx, rec).FirstErr(); err != nil {
+		t.Fatal(err)
+	}
+	dead := harness.ReadDLQ(t, 1, 30*time.Second)[0]
+	if !strings.Contains(header(dead, "error"), "missing_header") {
+		t.Errorf("error header = %q, want missing_header", header(dead, "error"))
+	}
+	awaitProcessed(t) // a later, well-formed message still reaches Gold
+}

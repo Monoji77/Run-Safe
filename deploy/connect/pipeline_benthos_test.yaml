@@ -108,3 +108,27 @@ tests:
         metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
     output_batches:
       - - bloblang: 'errored() && error().contains("value_out_of_range")'
+
+  - name: missing_fetched_at_header_is_missing_header
+    target_processors: /pipeline/processors
+    input_batch:
+      - file_content: testdata/pm25.json
+        metadata: {source: pm25, payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("missing_header")'
+
+  - name: malformed_fetched_at_header_is_missing_header
+    target_processors: /pipeline/processors
+    input_batch:
+      - file_content: testdata/pm25.json
+        metadata: {source: pm25, fetched_at: "yesterday", payload_sha256: abc123, kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("missing_header")'
+
+  - name: missing_payload_sha256_header_is_missing_header
+    target_processors: /pipeline/processors
+    input_batch:
+      - file_content: testdata/pm25.json
+        metadata: {source: pm25, fetched_at: "2026-10-26T00:46:00Z", kafka_partition: "0", kafka_offset: "7"}
+    output_batches:
+      - - bloblang: 'errored() && error().contains("missing_header")'

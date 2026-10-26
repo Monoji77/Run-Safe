@@ -242,3 +242,30 @@ func TestHealthzAndMethods(t *testing.T) {
 		t.Errorf("POST = %d, want 405", rec.Code)
 	}
 }
+
+func TestNeighbouringCountriesAreOutsideCoverage(t *testing.T) {
+	h := newHandler(t, west(&fakeStore{}, 39, now.Add(-30*time.Minute)))
+	for name, target := range map[string]string{
+		"Johor Bahru": "/v1/safe-to-run?lat=1.4927&lon=103.7414",
+		"Batam":       "/v1/safe-to-run?lat=1.1900&lon=104.0800",
+	} {
+		if code, body := get(t, h, target); code != 422 || at(body, "error") != "outside_coverage" {
+			t.Errorf("%s: code=%d body=%v; want 422 outside_coverage", name, code, body)
+		}
+	}
+}
+
+func TestSingaporeExtremesAreInsideCoverage(t *testing.T) {
+	h := newHandler(t, west(&fakeStore{}, 39, now.Add(-30*time.Minute)))
+	for name, target := range map[string]string{
+		"Woodlands":   "/v1/safe-to-run?lat=1.4382&lon=103.7890",
+		"Pulau Ubin":  "/v1/safe-to-run?lat=1.4044&lon=103.9618",
+		"Tuas":        "/v1/safe-to-run?lat=1.2977&lon=103.6366",
+		"Sentosa":     "/v1/safe-to-run?lat=1.2494&lon=103.8303",
+		"Changi Pt":   "/v1/safe-to-run?lat=1.3890&lon=104.0200",
+	} {
+		if code, _ := get(t, h, target); code != 200 {
+			t.Errorf("%s: code=%d, want 200", name, code)
+		}
+	}
+}

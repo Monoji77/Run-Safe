@@ -17,6 +17,17 @@ pipeline:
           root = throw("invalid_json: body is not valid JSON")
         }
 
+        # The lineage headers feed NOT NULL columns. Reject a record that lacks them here: a constraint
+        # violation in the SQL output would be retried forever and stall the whole stream.
+        let fetched_at = metadata("fetched_at").or("")
+        if $fetched_at.type() != "string" || $fetched_at.ts_parse("2006-01-02T15:04:05Z07:00").catch(null) == null {
+          root = throw("missing_header: fetched_at is missing or not RFC3339")
+        }
+        let payload_sha256 = metadata("payload_sha256").or("")
+        if $payload_sha256.type() != "string" || $payload_sha256 == "" {
+          root = throw("missing_header: payload_sha256 is missing")
+        }
+
         let allowed_regions = ["north", "south", "east", "west", "central"]
         let ts_layout = "2006-01-02T15:04:05Z07:00"
         let lineage = {

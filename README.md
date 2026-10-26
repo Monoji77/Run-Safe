@@ -87,4 +87,6 @@ The API is bound to `127.0.0.1` only until remote access is designed. See `docs/
 - Redpanda runs with `--mode dev-container`. `weather.bronze` is created with `write.caching=false` (accepted by the pinned v26.2.6); confirm durability before treating Bronze as the source of truth.
 - Redpanda's built-in trial licence enables continuous balancing by default. Compose pins `partition_autobalancing_mode=node_add` and `core_balancing_continuous=false`, and a test checks it, so no enterprise feature is in use.
 - Region lookup is nearest label point: regional and approximate.
+- The "Singapore only" check is a coarse bounding box: it excludes Johor Bahru and Batam's northern shore, but a strip along the Causeway and the waters between Singapore and Batam can still resolve to a Singapore region. A boundary-polygon check needs the boundary load (a later plan).
+- Nothing alerts on DLQ growth yet (the spec calls for it). If the source changes shape, messages go to `weather.dlq` and Gold stops updating for that source; the API then reports `unknown`, which is safe, but check the DLQ (`rpk topic describe weather.dlq`).
 - The update cadence (about every 15 minutes) is still a hypothesis; the fetcher logs each poll so it can be confirmed.
