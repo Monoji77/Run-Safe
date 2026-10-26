@@ -58,6 +58,23 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    environment:
+      API_DSN: postgres://api_ro:${API_RO_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      GUIDANCE_PATH: /config/guidance.yaml
+    volumes:
+      - ../config/guidance.yaml:/config/guidance.yaml:ro
+    ports:
+      # The only published port in the main stack. Bound to loopback until remote access is designed.
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   connect:
     image: docker.redpanda.com/redpandadata/connect:4.115.1
     working_dir: /connect
