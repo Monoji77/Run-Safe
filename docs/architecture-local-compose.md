@@ -101,7 +101,7 @@ Keep the broker and database internal to the Compose network; publish only the A
 
 ## Data model (illustrative, to be refined in the plan)
 
-- `gold.observations`: source, metric, region (nullable or `national` for UV), observed_at, source_updated_at, value, unit, averaging period, ingested_at, Bronze partition/offset, payload hash. Primary key `(source, metric, region, observed_at)`. Upsert `WHERE EXCLUDED.source_updated_at > observations.source_updated_at`. Earlier versions remain in Bronze, not in Gold.
+- `gold.observations`: source, metric, region (nullable or `national` for UV), observed_at, source_updated_at, value, unit, ingested_at, Bronze partition/offset, payload hash. The averaging period is encoded in the metric name (for example `pm25_one_hourly`), not a separate column. Primary key `(source, metric, region, observed_at)`. Upsert `WHERE EXCLUDED.source_updated_at > observations.source_updated_at`. Earlier versions remain in Bronze, not in Gold.
 - `gold.regions`: region id (north, south, east, west, central), label point (from the API), nullable `geometry(MultiPolygon, 4326)` filled by the boundary load, boundary source and vintage. GiST index on the polygon column. For metric area/distance work, transform to Singapore's projected CRS (SVY21, EPSG:3414, to be confirmed) or use `geography`.
 - `gold.current_conditions`: latest per region and metric with computed freshness. Distinct metric timestamps are treated independently.
 - A guidance configuration (versioned): PM2.5 band thresholds and advice text, UV bands, staleness limits, alert thresholds. It lives in the Go API's configuration or a small table; undecided.
