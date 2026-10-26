@@ -46,13 +46,23 @@ func Kafka(t *testing.T) *kgo.Client {
 	return cl
 }
 
-// DB returns a superuser pool; it is closed when the test ends.
+var pools sync.Map // test name -> *pgxpool.Pool
+
+// DB returns the test's superuser pool (one small pool per test, closed when the test ends).
 func DB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	mark(t)
+	if p, ok := pools.Load(t.Name()); ok {
+		return p.(*pgxpool.Pool)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, DSN())
+	cfg, err := pgxpool.ParseConfig(DSN())
+	if err != nil {
+		t.Fatalf("db config: %v", err)
+	}
+	cfg.MaxConns = 4
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatalf("db pool: %v", err)
 	}
@@ -60,7 +70,8 @@ func DB(t *testing.T) *pgxpool.Pool {
 		pool.Close()
 		t.Fatalf("db ping: %v", err)
 	}
-	t.Cleanup(pool.Close)
+	pools.Store(t.Name(), pool)
+	t.Cleanup(func() { pools.Delete(t.Name()); pool.Close() })
 	return pool
 }
 

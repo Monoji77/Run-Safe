@@ -49,9 +49,14 @@ services:
     volumes:
       - ./connect:/connect:ro
     command: ["run", "/connect/pipeline.yaml"]
+    environment:
+      CONNECT_RW_PASSWORD: ${CONNECT_RW_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     depends_on:
       redpanda:
         condition: service_healthy
+      init-topics:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
