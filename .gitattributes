@@ -1,0 +1,5 @@
+# Scripts and SQL run inside Linux containers: never convert their line endings.
+*.sh   text eol=lf
+*.sql  text eol=lf
+*.yaml text eol=lf
+scripts/* text eol=lf
