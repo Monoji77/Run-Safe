@@ -1,0 +1,11 @@
+# Development override: publishes loopback-only ports so host-side integration tests can reach the stack.
+# Run with: docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml up -d
+
+services:
+  redpanda:
+    ports:
+      - "127.0.0.1:19092:19092"
+      - "127.0.0.1:19644:9644"
+  postgres:
+    ports:
+      - "127.0.0.1:15432:5432"

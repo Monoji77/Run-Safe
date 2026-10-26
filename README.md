@@ -43,3 +43,28 @@ The spec covers the "safe to run here?" query, location lookup and UV alerts as 
 - How alerts are delivered (phone notification or something else), and how I use the app away from home, since the current design assumes the home network.
 - How a location maps to a reporting region, and which official guidance defines "safe to run".
 - Basemap (OneMap tiles or self-hosted), the source of region boundary polygons, the frontend stack, and the polling schedule.
+
+## Run locally
+
+Prerequisites: Docker Desktop (Compose v2) and, for editing, Go (`winget install GoLang.Go`).
+
+```
+cp .env.example .env
+docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml up -d
+```
+
+The dev override publishes loopback-only ports so tests can reach Redpanda and Postgres. The main file `deploy/compose.yaml` publishes nothing except the API (once it exists).
+
+Run Go commands through `scripts/dgo`, which uses a Linux Go container attached to the Compose network. Native `go test` binaries are blocked on machines where Windows Smart App Control is enforcing.
+
+```
+scripts/dgo test ./...                                   # unit tests
+scripts/dgo test -tags=integration ./test/infra/... -v   # integration tests against the running stack
+```
+
+## Known risks (carried from the spec)
+
+- Bronze is a single copy on one disk; backup is deferred.
+- Redpanda runs with `--mode dev-container`. `weather.bronze` is created with `write.caching=false` (accepted by the pinned v26.2.6); confirm durability before treating Bronze as the source of truth.
+- Redpanda's built-in trial licence enables continuous balancing by default. Compose pins `partition_autobalancing_mode=node_add` and `core_balancing_continuous=false`, and a test checks it, so no enterprise feature is in use.
+- Region lookup is nearest label point: regional and approximate.

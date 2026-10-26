@@ -1,0 +1,64 @@
+name: runsafe
+
+# Main stack: the broker and database are internal to the Compose network.
+# Only the api service (added later) publishes a host port. Use compose.dev.yaml for loopback test ports.
+# Run with: docker compose --env-file .env -f deploy/compose.yaml up -d
+
+services:
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.6
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --node-id=0
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://127.0.0.1:19092
+    volumes:
+      # Named volume (ext4 inside the WSL2 VM). Never bind-mount a Windows or OneDrive path here.
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  init-topics:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.2.6
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        # Community Edition only: the trial licence turns continuous balancing (enterprise) on by default.
+        rpk -X admin.hosts=redpanda:9644 cluster config set partition_autobalancing_mode node_add
+        rpk -X admin.hosts=redpanda:9644 cluster config set core_balancing_continuous false
+        rpk -X brokers=redpanda:9092 topic create weather.bronze -c retention.ms=-1 -c retention.bytes=-1 -c write.caching=false \
+          || rpk -X brokers=redpanda:9092 topic describe weather.bronze > /dev/null
+        rpk -X brokers=redpanda:9092 topic create weather.dlq -c retention.ms=-1 -c retention.bytes=-1 \
+          || rpk -X brokers=redpanda:9092 topic describe weather.dlq > /dev/null
+
+  postgres:
+    image: postgis/postgis:17-3.6
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      API_RO_PASSWORD: ${API_RO_PASSWORD}
+      CONNECT_RW_PASSWORD: ${CONNECT_RW_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  redpanda-data:
+  pgdata:

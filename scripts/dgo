@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Run the Go toolchain in a Linux container attached to the Compose network.
+# Why: Windows Smart App Control blocks the unsigned test binaries a native `go test` produces.
+# Usage: scripts/dgo test -tags=integration ./test/infra/... -v
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd -W 2>/dev/null || pwd)
+MSYS_NO_PATHCONV=1 docker run --rm --network runsafe_default \
+  -e RUNSAFE_KAFKA="${RUNSAFE_KAFKA:-redpanda:9092}" \
+  -e RUNSAFE_ADMIN="${RUNSAFE_ADMIN:-redpanda:9644}" \
+  -e RUNSAFE_DB="${RUNSAFE_DB:-postgres://postgres:postgres-dev-only@postgres:5432/runsafe?sslmode=disable}" \
+  -v "$root":/src -v runsafe-gomod:/go/pkg/mod -v runsafe-gocache:/root/.cache/go-build \
+  -w /src golang:1.27 go "$@"
