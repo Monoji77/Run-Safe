@@ -58,9 +58,28 @@ The dev override publishes loopback-only ports so tests can reach Redpanda and P
 Run Go commands through `scripts/dgo`, which uses a Linux Go container attached to the Compose network. Native `go test` binaries are blocked on machines where Windows Smart App Control is enforcing.
 
 ```
-scripts/dgo test ./...                                   # unit tests
-scripts/dgo test -tags=integration ./test/infra/... -v   # integration tests against the running stack
+scripts/dgo test ./...                                                  # unit tests
+scripts/dgo test -tags=integration ./...                                # integration tests against the running stack
+docker compose --env-file .env -f deploy/compose.yaml run --rm --no-deps connect test /connect/pipeline_benthos_test.yaml   # pipeline mapping tests
+DGO_DOCKER_SOCKET=1 scripts/dgo test -tags=e2e ./test/e2e/... -v       # end-to-end (stops and starts containers)
 ```
+
+`scripts/dgo` runs test packages one at a time (`-p 1`) because the integration and e2e tests share one database and broker.
+Integration tests empty `gold.observations`; restart the fetcher afterwards to refill it with current readings
+(`docker compose --env-file .env -f deploy/compose.yaml -f deploy/compose.dev.yaml restart fetcher`).
+The e2e suite mounts the Docker socket into the test container, which gives it control of your local Docker engine.
+
+### Try it
+
+With the stack up, ask whether it is safe to run at a location (latitude and longitude, Singapore only):
+
+```
+curl "http://127.0.0.1:8080/v1/safe-to-run?lat=1.3329&lon=103.7436"
+```
+
+The answer is the official 1-hour PM2.5 band advice for the nearest of the five NEA regions, the reading and its age,
+the UV index with a sunscreen flag, and `unknown` (never a safe-looking answer) when data is missing or stale.
+The API is bound to `127.0.0.1` only until remote access is designed. See `docs/data-source.md` for the API limits.
 
 ## Known risks (carried from the spec)
 
@@ -68,3 +87,4 @@ scripts/dgo test -tags=integration ./test/infra/... -v   # integration tests aga
 - Redpanda runs with `--mode dev-container`. `weather.bronze` is created with `write.caching=false` (accepted by the pinned v26.2.6); confirm durability before treating Bronze as the source of truth.
 - Redpanda's built-in trial licence enables continuous balancing by default. Compose pins `partition_autobalancing_mode=node_add` and `core_balancing_continuous=false`, and a test checks it, so no enterprise feature is in use.
 - Region lookup is nearest label point: regional and approximate.
+- The update cadence (about every 15 minutes) is still a hypothesis; the fetcher logs each poll so it can be confirmed.

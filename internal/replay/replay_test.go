@@ -27,7 +27,7 @@ func commitToEnd(t *testing.T, cl *kgo.Client, group string) {
 		t.Fatal(err)
 	}
 	offs := kadm.Offsets{}
-	ends.Each(func(o kadm.ListedOffset) { offs.Add(kadm.Offset{Topic: o.Topic, Partition: o.Partition, At: o.Offset}) })
+	ends.Each(func(o kadm.ListedOffset) { offs.Add(kadm.Offset{Topic: o.Topic, Partition: o.Partition, At: o.Offset, LeaderEpoch: -1}) })
 	if _, err := adm.CommitOffsets(ctx, group, offs); err != nil {
 		t.Fatal(err)
 	}

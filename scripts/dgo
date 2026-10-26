@@ -2,11 +2,24 @@
 # Run the Go toolchain in a Linux container attached to the Compose network.
 # Why: Windows Smart App Control blocks the unsigned test binaries a native `go test` produces.
 # Usage: scripts/dgo test -tags=integration ./test/infra/... -v
+# e2e:   DGO_DOCKER_SOCKET=1 scripts/dgo test -tags=e2e ./test/e2e/... -v
+#        (mounts the Docker socket so tests can stop and start containers; it grants control of the local
+#        Docker engine, so it is opt-in)
 set -euo pipefail
+# Integration packages share one database and broker and truncate each other's data: never run them in parallel.
+if [ "${1:-}" = "test" ]; then
+  shift
+  set -- test -p 1 "$@"
+fi
 root=$(cd "$(dirname "$0")/.." && pwd -W 2>/dev/null || pwd)
-MSYS_NO_PATHCONV=1 docker run --rm --network runsafe_default \
+sock=()
+if [ "${DGO_DOCKER_SOCKET:-}" = "1" ]; then
+  sock=(-v /var/run/docker.sock:/var/run/docker.sock)
+fi
+MSYS_NO_PATHCONV=1 docker run --rm --network runsafe_default "${sock[@]}" \
   -e RUNSAFE_KAFKA="${RUNSAFE_KAFKA:-redpanda:9092}" \
   -e RUNSAFE_ADMIN="${RUNSAFE_ADMIN:-redpanda:9644}" \
+  -e RUNSAFE_API="${RUNSAFE_API:-http://api:8080}" \
   -e RUNSAFE_DB="${RUNSAFE_DB:-postgres://postgres:postgres-dev-only@postgres:5432/runsafe?sslmode=disable}" \
   -v "$root":/src -v runsafe-gomod:/go/pkg/mod -v runsafe-gocache:/root/.cache/go-build \
   -w /src golang:1.27 go "$@"

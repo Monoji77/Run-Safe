@@ -94,7 +94,7 @@ func Replay(ctx context.Context, cl *kgo.Client, group string) (int, error) {
 	}
 	offs := kadm.Offsets{}
 	for p, at := range next {
-		offs.Add(kadm.Offset{Topic: dlqTopic, Partition: p, At: at})
+		offs.Add(kadm.Offset{Topic: dlqTopic, Partition: p, At: at, LeaderEpoch: -1})
 	}
 	if _, err := adm.CommitOffsets(ctx, group, offs); err != nil {
 		return 0, fmt.Errorf("commit offsets: %w", err)
